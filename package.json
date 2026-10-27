@@ -1,0 +1,25 @@
+{
+  "name": "devengine-mvp",
+  "version": "0.1.0",
+  "description": "Zero-Trust AI CLI for Next.js + Supabase scaffolding",
+  "main": "dist/cli.js",
+  "bin": {
+    "devengine": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli.ts",
+    "inject": "tsx src/injector/index.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
