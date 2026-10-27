@@ -37,14 +37,12 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-white font-sans">
-      {/* Header */}
       <header className="p-4 border-b border-gray-800 bg-gray-950 flex items-center justify-between">
         <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
           DevEngine AI (UI)
         </h1>
       </header>
 
-      {/* Chat Area */}
       <main className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -56,7 +54,6 @@ export default function Home() {
         {loading && <div className="text-gray-400 animate-pulse">El Arquitecto está pensando...</div>}
       </main>
 
-      {/* Input Area */}
       <footer className="p-4 border-t border-gray-800 bg-gray-950">
         <form onSubmit={handleSubmit} className="max-w-4xl mx-auto flex gap-4">
           <input
