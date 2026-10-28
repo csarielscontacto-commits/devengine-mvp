@@ -5,36 +5,55 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const CODER_SYSTEM_PROMPT = `
-Eres el Agente Coder de DevEngine. Recibes un Blueprint JSON aprobado y debes generar TODOS los archivos del proyecto.
-No improvisas, no agregas features, no cambias el stack.
+const SYSTEM_PROMPT = `
+Eres el Agente Arquitecto de DevEngine. Tu trabajo es producir un Blueprint
+técnico en JSON válido. Si el usuario te envía una imagen, analízala y extrae
+la idea de la aplicación basándote en lo que ves (botones, colores, flujo).
 
-REGLA #1: El Blueprint es la única verdad. 
-REGLA #2: Todo acceso a credenciales DEBE ser process.env.VAR_NAME.
-REGLA #3: Genera .env.example y .gitignore.
-REGLA #4: Devuelve un JSON estricto con esta estructura:
-{
-  "files": [
-    { "path": "app/page.tsx", "content": "..." },
-    { "path": "package.json", "content": "..." }
-  ]
-}
-NO devuelvas markdown, solo el JSON puro.
+STACK FIJO:
+- Frontend + Backend: Next.js 14 App Router (TypeScript)
+- DB + Auth: Supabase (PostgreSQL + RLS)
+- Deploy: Vercel
+- Estilos: Tailwind CSS
+
+REGLAS DURAS:
+- Tu respuesta final debe ser EXCLUSIVAMENTE el objeto JSON, sin markdown.
+- NUNCA pidas valores de llaves al usuario.
 `;
 
 export async function POST(req: Request) {
   try {
-    const { blueprint } = await req.json();
+    const { prompt, imageBase64 } = await req.json();
 
-    if (!blueprint) {
-      return NextResponse.json({ error: 'Falta el blueprint.' }, { status: 400 });
+    if (!prompt && !imageBase64) {
+      return NextResponse.json({ error: 'Falta el prompt o la imagen.' }, { status: 400 });
+    }
+
+    // Estructura del mensaje para Claude
+    const messageContent: any[] = [];
+    
+    if (imageBase64) {
+      // Limpiamos el formato base64 (quitamos data:image/jpeg;base64,)
+      const base64Data = imageBase64.split(',')[1];
+      messageContent.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: 'image/jpeg', // Asumimos jpeg por simplicidad
+          data: base64Data,
+        },
+      });
     }
     
+    if (prompt) {
+      messageContent.push({ type: 'text', text: prompt });
+    }
+
     const response = await anthropic.messages.create({
       model: 'claude-3-5-sonnet-20240620',
-      max_tokens: 8192, // Aumentado para proyectos más grandes
-      system: CODER_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: JSON.stringify(blueprint) }],
+      max_tokens: 4096,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: messageContent }],
     });
 
     const content = response.content[0];
@@ -44,7 +63,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ result: cleaned });
     }
     
-    return NextResponse.json({ error: 'Error generando código' }, { status: 500 });
+    return NextResponse.json({ error: 'Respuesta inesperada' }, { status: 500 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
