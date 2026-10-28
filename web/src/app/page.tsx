@@ -5,13 +5,11 @@ export default function Home() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   
-  // Estados para el Flujo de Trabajo
   const [blueprint, setBlueprint] = useState<string | null>(null);
   const [files, setFiles] = useState<{ path: string, content: string }[]>([]);
   const [activeFile, setActiveFile] = useState<number>(0);
   const [step, setStep] = useState<'architect' | 'coder'>('architect');
 
-  // 1. Generar Blueprint
   const handleGenerateBlueprint = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
@@ -35,7 +33,6 @@ export default function Home() {
     }
   };
 
-  // 2. Generar Código a partir del Blueprint
   const handleGenerateCode = async () => {
     if (!blueprint) return;
     setLoading(true);
@@ -93,7 +90,6 @@ export default function Home() {
       {/* PANEL CENTRAL: Editor de Código (o Chat si no hay archivos) */}
       <main className="flex-1 flex flex-col min-w-0 border-r border-[#30363d]">
         {files.length === 0 ? (
-          // Vista de Chat / Blueprint
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
             <h2 className="text-2xl font-bold text-white">Agente Arquitecto</h2>
             <p className="text-gray-400 max-w-md">Describe tu app para generar el Blueprint técnico.</p>
@@ -108,14 +104,13 @@ export default function Home() {
                 </pre>
                 <div className="p-4 border-t border-[#30363d] flex justify-end">
                   <button onClick={handleGenerateCode} disabled={loading} className="bg-[#238636] hover:bg-[#2ea043] text-white px-4 py-2 rounded font-semibold transition-colors">
-                    {loading ? 'Generando Código...' : 'Aprobar y Generar Código con el Agente 2 ⚡'}
+                    {loading ? 'Generando Código...' : 'Aprobar y Generar Código ⚡'}
                   </button>
                 </div>
               </div>
             )}
           </div>
         ) : (
-          // Vista del Editor de Código
           <div className="flex-1 flex flex-col bg-[#0d1117]">
             <div className="bg-[#161b22] px-4 py-2 border-b border-[#30363d] flex items-center">
               <span className="text-sm font-mono text-gray-300">{files[activeFile]?.path}</span>
@@ -142,9 +137,6 @@ export default function Home() {
               {step === 'architect' ? 'Esperando descripción' : 'Blueprint listo'}
             </p>
           </div>
-          <p className="text-xs text-gray-500 leading-relaxed">
-            Utiliza este panel para dar instrucciones al sistema. Si quieres cambiar la arquitectura, empieza de nuevo.
-          </p>
         </div>
 
         <footer className="p-4 border-t border-[#30363d] bg-[#0d1117]">
