@@ -1,7 +1,8 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import Image from 'next/image';
 
 export default function Home() {
   const [input, setInput] = useState('');
@@ -12,18 +13,34 @@ export default function Home() {
   const [files, setFiles] = useState<{ path: string, content: string }[]>([]);
   const [activeFile, setActiveFile] = useState<number>(0);
 
+  // 🔥 ESTADOS PARA LA IMAGEN
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setImagePreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleGenerateBlueprint = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() && !imagePreview) return;
     setLoading(true);
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: input }),
+        body: JSON.stringify({ prompt: input, imageBase64: imagePreview }),
       });
       const data = await res.json();
-      if (data.result) setBlueprint(data.result);
+      if (data.result) {
+        setBlueprint(data.result);
+        setImagePreview(null); // Limpiar imagen después de generar
+      }
     } catch (error) {
       console.error(error);
     } finally {
@@ -53,7 +70,6 @@ export default function Home() {
     }
   };
 
-  // Función para descargar todo el proyecto en un ZIP
   const downloadProject = async () => {
     if (files.length === 0) return;
     const zip = new JSZip();
@@ -79,7 +95,6 @@ export default function Home() {
         <div className="p-3 border-b border-[#30363d] flex items-center justify-between bg-[#161b22]">
           <span className="font-semibold text-xs tracking-wider text-blue-400 uppercase">Explorador</span>
           
-          {/* BOTÓN DE DESCARGA ZIP */}
           {files.length > 0 && (
             <button 
               onClick={downloadProject}
@@ -129,7 +144,7 @@ export default function Home() {
                 {!blueprint ? (
                   <div className="space-y-4">
                     <h2 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500 mb-2">Laborando</h2>
-                    <p className="text-gray-400 text-sm">Describe tu aplicación para generar la arquitectura.</p>
+                    <p className="text-gray-400 text-sm">Describe tu aplicación o sube una foto de referencia.</p>
                   </div>
                 ) : (
                   <div className="text-left bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden shadow-2xl">
@@ -180,6 +195,15 @@ export default function Home() {
 
         <footer className="p-4">
           <form onSubmit={handleGenerateBlueprint} className="bg-[#0d1117] border border-[#30363d] rounded-xl p-2 focus-within:border-blue-500 transition-colors shadow-sm">
+            
+            {/* MINIATURA DE LA IMAGEN SI SE SUBIÓ */}
+            {imagePreview && (
+              <div className="relative w-16 h-16 mb-2 ml-2 rounded-md overflow-hidden border border-[#30363d]">
+                <Image src={imagePreview} alt="Preview" fill className="object-cover" />
+                <button type="button" onClick={() => setImagePreview(null)} className="absolute top-0 right-0 bg-red-600 text-white rounded-bl-md p-0.5 text-xs">✕</button>
+              </div>
+            )}
+
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -189,18 +213,27 @@ export default function Home() {
             />
             <div className="flex items-center justify-between px-2 pt-2">
               <div className="flex items-center gap-2">
-                <button type="button" className="text-gray-500 hover:text-white transition-colors">
+                
+                {/* 🔥 BOTÓN DE SUBIR IMAGEN ACTIVADO */}
+                <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
+                <button 
+                  type="button" 
+                  onClick={() => fileInputRef.current?.click()} 
+                  className="text-gray-500 hover:text-white transition-colors p-1"
+                  title="Subir imagen"
+                >
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                   </svg>
                 </button>
+
                 <span className="text-xs text-blue-300 bg-[#1f6feb]/20 px-2 py-1 rounded-md border border-[#1f6feb]/30 cursor-pointer hover:bg-[#1f6feb]/30 transition-colors">
                   Claude 3.5 Sonnet ⌄
                 </span>
               </div>
               <button 
                 type="submit" 
-                disabled={loading || !input.trim()}
+                disabled={loading || (!input.trim() && !imagePreview)}
                 className="p-2 bg-blue-600 hover:bg-blue-500 rounded-md text-white disabled:opacity-50 transition-colors shadow-md"
               >
                 {loading ? (
