@@ -1,30 +1,22 @@
 'use client';
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 
 export default function Home() {
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<{ role: string, content: string }[]>([]);
   const [loading, setLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Estados para el Flujo de Trabajo
+  const [blueprint, setBlueprint] = useState<string | null>(null);
+  const [files, setFiles] = useState<{ path: string, content: string }[]>([]);
+  const [activeFile, setActiveFile] = useState<number>(0);
+  const [step, setStep] = useState<'architect' | 'coder'>('architect');
 
-  // Auto-scroll al último mensaje
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, loading]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  // 1. Generar Blueprint
+  const handleGenerateBlueprint = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || loading) return;
+    if (!input.trim()) return;
 
-    const userMsg = { role: 'user', content: input };
-    setMessages(prev => [...prev, userMsg]);
-    setInput('');
     setLoading(true);
-
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -32,159 +24,149 @@ export default function Home() {
         body: JSON.stringify({ prompt: input }),
       });
       const data = await res.json();
-      
       if (data.result) {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.result }]);
-      } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: '❌ Error: ' + data.error }]);
+        setBlueprint(data.result);
+        setStep('coder');
       }
     } catch (error) {
       console.error(error);
-      setMessages(prev => [...prev, { role: 'assistant', content: '❌ Error de conexión con el servidor.' }]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Manejo de "Enter" para enviar, "Shift+Enter" para salto de línea
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit(e as unknown as React.FormEvent);
+  // 2. Generar Código a partir del Blueprint
+  const handleGenerateCode = async () => {
+    if (!blueprint) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blueprint: JSON.parse(blueprint) }),
+      });
+      const data = await res.json();
+      if (data.result) {
+        const parsed = JSON.parse(data.result);
+        setFiles(parsed.files || []);
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Error generando código. Revisa la consola.');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="flex h-screen bg-[#0d1117] text-[#c9d1d9] font-sans overflow-hidden">
       
-      {/* Panel Lateral (Sidebar tipo IDE) */}
-      <aside className="w-64 bg-[#161b22] border-r border-[#30363d] flex flex-col hidden md:flex">
+      {/* PANEL IZQUIERDO: Explorador de Archivos */}
+      <aside className="w-64 bg-[#161b22] border-r border-[#30363d] flex flex-col">
         <div className="p-4 border-b border-[#30363d] flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-red-500"></div>
-          <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-          <div className="w-3 h-3 rounded-full bg-green-500"></div>
-          <span className="ml-2 text-sm font-semibold text-gray-400">devengine-mvp</span>
+          <span className="text-xl">🤖</span>
+          <span className="font-bold text-white">DevEngine</span>
         </div>
-        <div className="p-4 flex-1">
-          <p className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider">Explorador</p>
-          <ul className="space-y-1 text-sm text-gray-400">
-            <li className="flex items-center gap-2 hover:text-white cursor-pointer px-2 py-1 rounded hover:bg-[#21262d]">
-              <span className="text-blue-400">📁</span> src
-            </li>
-            <li className="flex items-center gap-2 hover:text-white cursor-pointer px-2 py-1 rounded hover:bg-[#21262d] ml-4">
-              <span className="text-blue-400">📁</span> app
-            </li>
-            <li className="flex items-center gap-2 text-white px-2 py-1 rounded bg-[#21262d] ml-8">
-              <span className="text-yellow-400">📄</span> page.tsx
-            </li>
-          </ul>
+        
+        <div className="flex-1 overflow-y-auto p-4">
+          <p className="text-xs font-bold text-gray-500 mb-4 uppercase tracking-wider">Archivos Generados</p>
+          
+          {files.length === 0 ? (
+            <p className="text-sm text-gray-500 italic">Aún no hay archivos. Genera el Blueprint primero.</p>
+          ) : (
+            <ul className="space-y-1">
+              {files.map((file, idx) => (
+                <li 
+                  key={idx}
+                  onClick={() => setActiveFile(idx)}
+                  className={`flex items-center gap-2 cursor-pointer px-2 py-1.5 rounded text-sm ${activeFile === idx ? 'bg-[#1f6feb] text-white' : 'text-gray-400 hover:bg-[#21262d] hover:text-white'}`}
+                >
+                  <span className="text-blue-400">📄</span> 
+                  <span className="truncate">{file.path}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </aside>
 
-      {/* Área Principal del Chat */}
-      <div className="flex-1 flex flex-col relative">
-        
-        {/* Header */}
-        <header className="h-14 border-b border-[#30363d] flex items-center px-4 justify-between bg-[#0d1117] z-10">
-          <h1 className="text-lg font-semibold text-white flex items-center gap-2">
-            <span className="text-blue-500">✦</span> DevEngine Architect
-          </h1>
-          <span className="text-xs bg-[#238636] text-white px-2 py-1 rounded-full font-medium">Zero-Trust</span>
+      {/* PANEL CENTRAL: Editor de Código (o Chat si no hay archivos) */}
+      <main className="flex-1 flex flex-col min-w-0 border-r border-[#30363d]">
+        {files.length === 0 ? (
+          // Vista de Chat / Blueprint
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
+            <h2 className="text-2xl font-bold text-white">Agente Arquitecto</h2>
+            <p className="text-gray-400 max-w-md">Describe tu app para generar el Blueprint técnico.</p>
+            
+            {blueprint && (
+              <div className="w-full max-w-2xl text-left bg-[#161b22] border border-[#30363d] rounded-lg mt-8">
+                <div className="bg-[#0d1117] px-4 py-2 border-b border-[#30363d] flex justify-between items-center">
+                  <span className="text-xs font-mono text-gray-400">blueprint.json</span>
+                </div>
+                <pre className="p-4 text-xs font-mono text-green-300 overflow-x-auto max-h-96">
+                  {blueprint}
+                </pre>
+                <div className="p-4 border-t border-[#30363d] flex justify-end">
+                  <button onClick={handleGenerateCode} disabled={loading} className="bg-[#238636] hover:bg-[#2ea043] text-white px-4 py-2 rounded font-semibold transition-colors">
+                    {loading ? 'Generando Código...' : 'Aprobar y Generar Código con el Agente 2 ⚡'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          // Vista del Editor de Código
+          <div className="flex-1 flex flex-col bg-[#0d1117]">
+            <div className="bg-[#161b22] px-4 py-2 border-b border-[#30363d] flex items-center">
+              <span className="text-sm font-mono text-gray-300">{files[activeFile]?.path}</span>
+            </div>
+            <div className="flex-1 overflow-auto p-4">
+              <pre className="text-sm font-mono text-blue-200">
+                <code>{files[activeFile]?.content}</code>
+              </pre>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* PANEL DERECHO: El Chat de control */}
+      <aside className="w-80 bg-[#161b22] flex flex-col">
+        <header className="h-14 border-b border-[#30363d] flex items-center px-4 bg-[#0d1117]">
+          <h1 className="text-sm font-bold text-white">Panel de Control</h1>
         </header>
-
-        {/* Lista de Mensajes */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 pb-32">
-          {messages.length === 0 && (
-            <div className="h-full flex flex-col items-center justify-center text-center text-gray-500 space-y-4">
-              <div className="w-16 h-16 bg-[#161b22] rounded-2xl flex items-center justify-center border border-[#30363d]">
-                <span className="text-3xl">🏗️</span>
-              </div>
-              <h2 className="text-xl font-semibold text-gray-300">¿Qué vamos a construir hoy?</h2>
-              <p className="max-w-md text-sm">Describe tu aplicación full-stack. El Agente Arquitecto generará el Blueprint técnico en formato JSON.</p>
-            </div>
-          )}
-
-          {messages.map((msg, i) => (
-            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              
-              {/* Avatar del Bot */}
-              {msg.role === 'assistant' && (
-                <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white mr-3 flex-shrink-0 mt-1">
-                  ✦
-                </div>
-              )}
-
-              {/* Burbuja del Mensaje */}
-              <div className={`max-w-[85%] md:max-w-[75%] rounded-xl overflow-hidden ${
-                msg.role === 'user' 
-                  ? 'bg-[#1f6feb] text-white p-4' 
-                  : 'bg-[#161b22] border border-[#30363d]'
-              }`}>
-                
-                {/* Si es el bot, mostramos un bloque de código estilo IDE */}
-                {msg.role === 'assistant' ? (
-                  <div className="flex flex-col">
-                    <div className="bg-[#0d1117] px-4 py-2 border-b border-[#30363d] flex justify-between items-center">
-                      <span className="text-xs text-gray-400 font-mono">blueprint.json</span>
-                      <span className="text-xs text-gray-500">JSON</span>
-                    </div>
-                    <pre className="p-4 text-sm font-mono overflow-x-auto text-green-300">
-                      <code>{msg.content}</code>
-                    </pre>
-                  </div>
-                ) : (
-                  <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                )}
-              </div>
-            </div>
-          ))}
-
-          {loading && (
-            <div className="flex justify-start">
-              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white mr-3 flex-shrink-0">
-                ✦
-              </div>
-              <div className="bg-[#161b22] border border-[#30363d] p-4 rounded-xl flex items-center gap-3">
-                <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce delay-100"></div>
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce delay-200"></div>
-                </div>
-                <span className="text-gray-400 text-sm">El Arquitecto está diseñando tu Blueprint...</span>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </main>
-
-        {/* Input Flotante */}
-        <footer className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#0d1117] via-[#0d1117] to-transparent">
-          <div className="max-w-3xl mx-auto">
-            <form onSubmit={handleSubmit} className="relative flex items-end bg-[#161b22] border border-[#30363d] rounded-xl shadow-lg focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition-all">
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Describe tu app (ej. Una app de turnos médicos)..."
-                className="w-full bg-transparent text-white p-4 max-h-32 min-h-[60px] focus:outline-none resize-none"
-                rows={1}
-              />
-              <button 
-                type="submit" 
-                disabled={loading || !input.trim()}
-                className="m-2 p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-                </svg>
-              </button>
-            </form>
-            <p className="text-center text-xs text-gray-500 mt-2">
-              DevEngine AI puede cometer errores. Verifica la arquitectura antes de generar el código.
+        
+        <div className="flex-1 p-4 overflow-y-auto space-y-4">
+          <div className="bg-[#0d1117] p-3 rounded-lg border border-[#30363d]">
+            <p className="text-xs text-gray-400">Estado actual:</p>
+            <p className="text-sm font-semibold text-green-400">
+              {step === 'architect' ? 'Esperando descripción' : 'Blueprint listo'}
             </p>
           </div>
+          <p className="text-xs text-gray-500 leading-relaxed">
+            Utiliza este panel para dar instrucciones al sistema. Si quieres cambiar la arquitectura, empieza de nuevo.
+          </p>
+        </div>
+
+        <footer className="p-4 border-t border-[#30363d] bg-[#0d1117]">
+          <form onSubmit={handleGenerateBlueprint} className="flex flex-col gap-2">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Describe tu app..."
+              className="w-full bg-[#161b22] text-white p-3 rounded-lg border border-[#30363d] focus:outline-none focus:border-blue-500 resize-none"
+              rows={3}
+            />
+            <button 
+              type="submit" 
+              disabled={loading || !input.trim()}
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-lg font-semibold disabled:opacity-50 transition-colors"
+            >
+              {loading ? 'Pensando...' : 'Generar Blueprint'}
+            </button>
+          </form>
         </footer>
-      </div>
+      </aside>
+
     </div>
   );
 }
